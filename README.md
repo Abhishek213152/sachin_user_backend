@@ -73,4 +73,3 @@ You can test the Cloudinary upload by using the Profile screen in the app. When 
 3. Store only the URL in MongoDB (not the actual image)
 4. Return the URL to the frontend
 5. Display the image from Cloudinary's CDN
-# sachin_user_backend
