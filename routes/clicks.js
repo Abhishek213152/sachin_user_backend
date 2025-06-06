@@ -102,10 +102,8 @@ router.post("/create", async (req, res) => {
 // Handle postback from tracking platform
 router.post("/postback", async (req, res) => {
   try {
-    const { click_id, pcid, status, offer_id, payout } = req.body;
-
     // Accept either click_id or pcid
-    const clickId = click_id || pcid;
+    const clickId = req.body.click_id || req.body.pcid;
 
     // Validate required fields
     if (!clickId) {
@@ -125,51 +123,43 @@ router.post("/postback", async (req, res) => {
       });
     }
 
-    // Verify if the offer matches (if offer_id is provided)
-    if (offer_id && click.offerId.toString() !== offer_id) {
-      return res.status(400).json({
-        success: false,
-        message: "Offer ID mismatch",
-      });
-    }
-
-    // Check if click is already rewarded
+    // Check if already rewarded
     if (click.isRewarded) {
-      return res.status(400).json({
-        success: false,
-        message: "Click already rewarded",
+      return res.json({
+        success: true,
+        message: "Click was already rewarded",
+        status: click.status,
+        isRewarded: true,
+        click_id: clickId,
+        pcid: clickId,
       });
     }
 
-    // Update click status
-    const newStatus = status || "installed";
-    click.status = newStatus;
+    // Mark as successful and reward
+    click.status = "installed";
+    click.isRewarded = true;
+    click.rewardedAt = new Date();
 
-    if (newStatus === "installed" || newStatus === "completed") {
-      click.isRewarded = true;
-      click.rewardedAt = new Date();
+    // Update user's coins
+    const updateResult = await User.findByIdAndUpdate(
+      click.userId,
+      {
+        $inc: { coins: click.rewardCoins },
+      },
+      { new: true }
+    );
 
-      // Update user's coins
-      const updateResult = await User.findByIdAndUpdate(
-        click.userId,
-        {
-          $inc: { coins: click.rewardCoins },
-        },
-        { new: true }
-      );
+    if (!updateResult) {
+      throw new Error("Failed to update user coins");
+    }
 
-      if (!updateResult) {
-        throw new Error("Failed to update user coins");
-      }
-
-      // Emit socket event if available
-      const io = req.app.get("io");
-      if (io) {
-        io.to(click.userId.toString()).emit("offerCompleted", {
-          clickId: click.clickId,
-          rewardCoins: click.rewardCoins,
-        });
-      }
+    // Emit socket event if available
+    const io = req.app.get("io");
+    if (io) {
+      io.to(click.userId.toString()).emit("offerCompleted", {
+        clickId: click.clickId,
+        rewardCoins: click.rewardCoins,
+      });
     }
 
     await click.save();
@@ -177,10 +167,10 @@ router.post("/postback", async (req, res) => {
     res.json({
       success: true,
       message: "Postback processed successfully",
-      status: newStatus,
-      isRewarded: click.isRewarded,
+      status: "installed",
+      isRewarded: true,
       click_id: clickId,
-      pcid: clickId, // Always include both formats in response
+      pcid: clickId,
     });
   } catch (error) {
     console.error("Error processing postback:", error);

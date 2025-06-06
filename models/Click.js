@@ -34,7 +34,6 @@ const clickSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["pending", "clicked", "installed", "rewarded", "failed"],
     default: "pending",
   },
   ipAddress: {
